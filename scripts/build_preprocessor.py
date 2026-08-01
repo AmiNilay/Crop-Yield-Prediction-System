@@ -7,6 +7,11 @@ Outputs:
   models/preprocessor.pkl        — fitted ColumnTransformer
   models/feature_schema.json     — metadata for dashboard + API
 
+IMPORTANT:
+  If preprocessor.pkl already exists (from train_pipeline), this script
+  will ask before overwriting. Use scripts/rebuild_schema.py instead
+  to extract schema without refitting.
+
 Run after dataset changes or when models/preprocessor.pkl is missing.
 """
 
@@ -61,7 +66,6 @@ def clean_columns(df: pd.DataFrame) -> pd.DataFrame:
         cleaned.append(new_col.strip("_"))
     df.columns = cleaned
 
-    # Fix costof_ prefix
     rename_map = {}
     for col in df.columns:
         if col.startswith("costof_"):
@@ -69,12 +73,10 @@ def clean_columns(df: pd.DataFrame) -> pd.DataFrame:
     if rename_map:
         df.rename(columns=rename_map, inplace=True)
 
-    # Normalize yield column
     yield_candidates = [c for c in df.columns if "yield" in c]
     if yield_candidates and yield_candidates[0] != "yield":
         df.rename(columns={yield_candidates[0]: "yield"}, inplace=True)
 
-    # Drop production and district if present
     for exc in ["production", "district"]:
         if exc in df.columns:
             df.drop(columns=[exc], inplace=True)
@@ -115,7 +117,6 @@ def enrich(df: pd.DataFrame) -> pd.DataFrame:
         print("  WARNING: No 'state' column — skipping enrichment")
         return df
 
-    # Weather
     missing_wx = [c for c in WEATHER_FEATURES if c not in df.columns]
     if missing_wx:
         print(f"  Enriching with weather ({len(missing_wx)} features)...")
@@ -127,7 +128,6 @@ def enrich(df: pd.DataFrame) -> pd.DataFrame:
                 if feat not in df.columns:
                     df[feat] = np.nan
 
-    # Irrigation
     if IRRIGATION_FEATURE not in df.columns:
         print("  Enriching with irrigation coverage...")
         try:
@@ -136,7 +136,6 @@ def enrich(df: pd.DataFrame) -> pd.DataFrame:
             print(f"  WARNING: Irrigation enrichment failed: {exc}")
             df[IRRIGATION_FEATURE] = np.nan
 
-    # Fertilizer
     if FERTILIZER_FEATURE not in df.columns:
         print("  Enriching with NPK fertilizer...")
         try:
@@ -156,14 +155,30 @@ def build(df: pd.DataFrame) -> None:
     """Fit ColumnTransformer and extract feature schema."""
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
+    # SAFETY: If a preprocessor already exists (from train_pipeline),
+    # warn before overwriting. Use rebuild_schema.py to extract schema
+    # without refitting.
+    existing_pp = MODELS_DIR / "preprocessor.pkl"
+    if existing_pp.exists():
+        print("\n  WARNING: preprocessor.pkl already exists!")
+        print("  Refitting may produce a DIFFERENT number of features")
+        print("  than the trained model expects (feature mismatch).")
+        print()
+        print("  RECOMMENDED: Use scripts/rebuild_schema.py instead")
+        print("  to extract schema without overwriting.")
+        print()
+        print("  To force refit anyway, delete models/preprocessor.pkl")
+        print("  first, then re-run this script.")
+        print()
+        print("  Skipping refit. Aborted.")
+        return
+
     # ── Define feature columns ──
-    # Categorical features
     cat_cols = []
     for col in ["crop", "state", "season"]:
         if col in df.columns:
             cat_cols.append(col)
 
-    # Numerical features (in order)
     num_cols = []
     candidates = [
         "crop_year",
@@ -211,7 +226,6 @@ def build(df: pd.DataFrame) -> None:
     # ── Extract output feature names ──
     output_feature_names = []
 
-    # OHE feature names
     ohe = preprocessor.named_transformers_["cat"]
     if hasattr(ohe, "get_feature_names_out"):
         ohe_names = list(ohe.get_feature_names_out(cat_cols))
@@ -223,7 +237,6 @@ def build(df: pd.DataFrame) -> None:
                 ohe_names.append(f"{col}_{cat}")
     output_feature_names.extend(ohe_names)
 
-    # Numerical feature names (pass through as-is)
     output_feature_names.extend(num_cols)
 
     print(f"  Output features after encoding: {len(output_feature_names)}")
@@ -240,13 +253,11 @@ def build(df: pd.DataFrame) -> None:
                 df_clean[col].dropna().unique().tolist()
             )
 
-    # Years
     if "crop_year" in df_clean.columns:
         unique_values["unique_crop_year"] = sorted(
             df_clean["crop_year"].dropna().unique().tolist()
         )
 
-    # Area statistics
     stats_area = {}
     if "area" in df_clean.columns:
         area = df_clean["area"].dropna()
