@@ -1,6 +1,6 @@
 {
   "model_version": "1.0.0",
-  "created_at": "2026-07-31T09:44:19Z",
+  "created_at": "2026-08-01T19:27:17Z",
   "model_type": "XGBRegressor",
   "framework": "xgboost 3.2.0",
   "random_seed": 42,
@@ -17,120 +17,14 @@
     "split": "80/20 (seed=42)"
   },
   "evaluation": {
-    "rmse": 11.5142,
-    "r2": 0.92,
-    "mae": 5.3273,
-    "mape": 39.89,
-    "n_samples": 10000,
-    "n_train": 40000,
-    "n_test": 10000,
-    "data_source": "train_test_split",
-    "seed": 42,
-    "per_crop": {
-      "ARHAR/TUR": {
-        "n": 592,
-        "rmse": 3.7433,
-        "mae": 2.8922,
-        "r2": -0.0226
-      },
-      "DRY CHILLIES": {
-        "n": 482,
-        "rmse": 5.7069,
-        "mae": 3.761,
-        "r2": 0.6316
-      },
-      "GRAM": {
-        "n": 555,
-        "rmse": 2.9113,
-        "mae": 2.1981,
-        "r2": 0.2043
-      },
-      "GROUNDNUT": {
-        "n": 694,
-        "rmse": 3.9967,
-        "mae": 3.117,
-        "r2": 0.4314
-      },
-      "JOWAR": {
-        "n": 558,
-        "rmse": 4.5736,
-        "mae": 3.4587,
-        "r2": 0.1962
-      },
-      "MAIZE": {
-        "n": 1038,
-        "rmse": 7.9057,
-        "mae": 5.763,
-        "r2": 0.5931
-      },
-      "MOONG(GREEN GRAM)": {
-        "n": 786,
-        "rmse": 1.9362,
-        "mae": 1.4709,
-        "r2": 0.2443
-      },
-      "ONION": {
-        "n": 527,
-        "rmse": 32.5237,
-        "mae": 22.2151,
-        "r2": 0.7791
-      },
-      "POTATO": {
-        "n": 518,
-        "rmse": 33.1419,
-        "mae": 24.3403,
-        "r2": 0.7701
-      },
-      "RAPESEED &MUSTARD": {
-        "n": 594,
-        "rmse": 2.634,
-        "mae": 2.1194,
-        "r2": 0.567
-      },
-      "RICE": {
-        "n": 1166,
-        "rmse": 6.2444,
-        "mae": 4.8553,
-        "r2": 0.5304
-      },
-      "SESAMUM": {
-        "n": 706,
-        "rmse": 1.8938,
-        "mae": 1.4572,
-        "r2": 0.3232
-      },
-      "SUNFLOWER": {
-        "n": 392,
-        "rmse": 3.5451,
-        "mae": 2.8172,
-        "r2": 0.4697
-      },
-      "URAD": {
-        "n": 760,
-        "rmse": 1.9191,
-        "mae": 1.5121,
-        "r2": 0.2252
-      },
-      "WHEAT": {
-        "n": 632,
-        "rmse": 5.6581,
-        "mae": 4.3972,
-        "r2": 0.6574
-      }
+    "test_metrics": {
+      "rmse": 12.0722,
+      "mae": 5.5714,
+      "r2": 0.9165,
+      "mape": 40.84
     },
-    "weather_period": "2025-07-31 to 2026-07-31",
-    "features": {
-      "total_input": 11,
-      "total_encoded": 59,
-      "weather": [
-        "mean_temperature",
-        "total_precipitation",
-        "mean_relative_humidity",
-        "mean_solar_radiation"
-      ],
-      "irrigation": "irrigation_coverage_pct",
-      "fertilizer": "npk_consumption_kg_per_ha"
-    }
+    "grid_search_cv": 3,
+    "grid_search_best_score": 0.9051
   },
   "files": {
     "model_pickle": "model.pkl",
