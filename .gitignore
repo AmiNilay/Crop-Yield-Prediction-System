@@ -22,35 +22,26 @@ env/
 logs/
 *.log
 
-# Data — processed intermediate files only (keep raw for deployment)
+# Data (user downloads from Kaggle)
+data/raw/
 data/processed/
 data/external/
 
-# Cached weather & forecast (regenerated at runtime)
-data/processed/forecast_cache.json
-data/processed/weather_cache.json
-data/processed/.weather_cache.json
-
-# Backup model formats (not needed for deployment; keep .json + .pkl only)
-models/*.ubj
-models/*.joblib
-models/rice_yield_predictor.joblib
-models/wheat_yield_predictor.pkl
+# Cached weather & forecast JSON
+*_cache.json
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Notebooks checkpoints
+# Jupyter
 .ipynb_checkpoints/
-notebooks/.ipynb_checkpoints/
 
-# Environment files
+# Environment
 .env
 *.env
 
-# Backup files
-*.backup
-requirements.txt.backup
-requirements.deploy-backup.txt
-
+# Large model binaries not needed for inference
+# (keep: model.json, feature_schema.json, model_metadata.json, preprocessor.pkl)
+models/*.ubj
+models/*.joblib
