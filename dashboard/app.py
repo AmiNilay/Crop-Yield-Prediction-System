@@ -2,14 +2,12 @@
 dashboard/app.py
 
 AI-Powered Crop Yield Prediction System — Streamlit Dashboard
-Version 3.2.1 — Bugfixes for checkbox, button placement, badge dedup
+Version 3.2.2 — Cloud-safe dataset loading
 
-Fixes applied:
-  BUG-1: Removed ☐ unicode from checkbox label (was rendering double checkbox)
-  BUG-2: Moved Refresh Weather next to weather card, not between badges
-  P1:    Removed redundant sidebar irrigation/NPK badges
-  P2:    Compressed forecast warning to caption
-  P3:    Consistent icons: 👨‍🌾 Your input / 🏛️ State default
+Fixes:
+  v3.2.1: Checkbox, button placement, badge dedup, icon consistency
+  v3.2.2: Dataset loading no longer hangs on Streamlit Cloud
+          (graceful None return when CSV not found)
 """
 
 # =========================================================================
@@ -442,7 +440,14 @@ def load_shap_explainer():
 
 @st.cache_data
 def load_dataset():
-    for path in (DATA_RAW_DIR / "crop_production_india.csv", DATA_PROC_DIR / "train.csv"):
+    """Load dataset for Data Insights tab. Returns None if unavailable (cloud-safe)."""
+    search_paths = [
+        DATA_RAW_DIR / "crop_production_india.csv",
+        DATA_PROC_DIR / "train.csv",
+        PROJECT_ROOT / "data" / "raw" / "crop_production_india.csv",
+        PROJECT_ROOT / "data" / "processed" / "train.csv",
+    ]
+    for path in search_paths:
         if path.exists():
             try:
                 df = pd.read_csv(path)
@@ -488,6 +493,7 @@ def predict_yield(booster, preprocessor, input_df, feature_names):
 
 @st.cache_data
 def compute_evaluation_metrics():
+    """Compute model evaluation metrics. Returns None if dataset unavailable (cloud-safe)."""
     try:
         schema_local = load_schema()
         preprocessor_local = load_preprocessor()
@@ -499,12 +505,15 @@ def compute_evaluation_metrics():
         crop_col_local = schema_local.get("crop_column")
         df = None
         source_name = ""
-        for csv_name, csv_dir in [
-            ("test.csv", DATA_PROC_DIR),
-            ("train.csv", DATA_PROC_DIR),
-            ("crop_production_india.csv", DATA_RAW_DIR),
-        ]:
-            p = csv_dir / csv_name
+        search_paths = [
+            (DATA_PROC_DIR / "test.csv", "test.csv"),
+            (DATA_PROC_DIR / "train.csv", "train.csv"),
+            (DATA_RAW_DIR / "crop_production_india.csv", "crop_production_india.csv"),
+            (PROJECT_ROOT / "data" / "processed" / "test.csv", "test.csv"),
+            (PROJECT_ROOT / "data" / "processed" / "train.csv", "train.csv"),
+            (PROJECT_ROOT / "data" / "raw" / "crop_production_india.csv", "crop_production_india.csv"),
+        ]
+        for p, csv_name in search_paths:
             if p.exists():
                 candidate = pd.read_csv(p)
                 candidate = clean_columns(candidate)
@@ -693,7 +702,6 @@ with st.sidebar:
                         f"</div>",
                         unsafe_allow_html=True,
                     )
-                    # BUG FIX P2: compress forecast warning to caption
                     if wx_preview.get("warning"):
                         st.caption(f"\u26a0\ufe0f {wx_preview['warning']}")
                 else:
@@ -712,7 +720,6 @@ with st.sidebar:
                         unsafe_allow_html=True,
                     )
 
-                # Risk badge (historical only)
                 if not use_forecast:
                     risk_result = assess_state_risk(
                         str(selected_state), weather=wx_preview
@@ -725,7 +732,6 @@ with st.sidebar:
                         unsafe_allow_html=True,
                     )
 
-                # BUG FIX 2: Refresh button grouped with weather card
                 if st.button(
                     "\U0001f504 Refresh weather data",
                     use_container_width=True,
@@ -756,7 +762,6 @@ with st.sidebar:
         # ── Your Farm ──
         st.markdown("#### \U0001f69c Your Farm")
 
-        # Area — always user input
         area_val = st.number_input(
             "Area (Hectares)",
             min_value=0.1,
@@ -768,7 +773,6 @@ with st.sidebar:
         )
         user_inputs["area"] = float(area_val)
 
-        # Get state averages for defaults
         state_irr_avg = 40.0
         state_npk_avg = 120.0
         if selected_state:
@@ -781,9 +785,6 @@ with st.sidebar:
             except Exception:
                 pass
 
-        # BUG FIX 1: Removed the ☐ unicode character from the label.
-        # The old label was "☐ Override state averages" which rendered
-        # a literal empty checkbox next to the real Streamlit checkbox.
         override_irr_npk = st.checkbox(
             "Override state averages",
             value=False,
@@ -821,7 +822,7 @@ with st.sidebar:
             irrigation_source = "state-avg"
             npk_source = "state-avg"
 
-        # Auto-fill weather features (from selected source)
+        # Auto-fill weather features
         if selected_state:
             try:
                 if use_forecast:
@@ -837,8 +838,6 @@ with st.sidebar:
                     user_inputs[feat] = 0.0
 
         st.divider()
-
-        # BUG FIX 2: Predict button at bottom, prominent
         predict_btn = st.button(
             "\U0001f52e Predict Yield",
             type="primary",
@@ -877,7 +876,6 @@ with tab_predict:
             booster, preprocessor, input_df, output_feature_names
         )
 
-        # Historical baseline for delta
         hist_pred = None
         if use_forecast and prediction is not None:
             hist_inputs = dict(user_inputs)
@@ -902,7 +900,6 @@ with tab_predict:
             col_left, col_right = st.columns([1, 2])
 
             with col_left:
-                # Yield card with optional delta
                 delta_html = ""
                 if use_forecast and hist_pred is not None:
                     delta = prediction - hist_pred
@@ -1021,7 +1018,7 @@ with tab_predict:
 
                         tv = fc["mean_temperature"]
                         ts = spread.get("mean_temperature", 0)
-                        td = (delta.get("mean_temperature", 0) if delta else 0)
+                        td = delta.get("mean_temperature", 0) if delta else 0
                         wc1.metric(
                             "Temperature",
                             f"{tv:.1f} \u00b0C \u00b1 {ts:.1f}",
@@ -1036,7 +1033,7 @@ with tab_predict:
 
                         rv = fc["total_precipitation"]
                         rs = spread.get("total_precipitation", 0)
-                        rd = (delta.get("total_precipitation", 0) if delta else 0)
+                        rd = delta.get("total_precipitation", 0) if delta else 0
                         wc2.metric(
                             "Rainfall",
                             f"{_fmt_int(rv)}mm/yr \u00b1 {_fmt_int(rs)}",
@@ -1049,7 +1046,7 @@ with tab_predict:
 
                         hv = fc["mean_relative_humidity"]
                         hs = spread.get("mean_relative_humidity", 0)
-                        hd = (delta.get("mean_relative_humidity", 0) if delta else 0)
+                        hd = delta.get("mean_relative_humidity", 0) if delta else 0
                         wc3.metric(
                             "Humidity",
                             f"{hv:.0f}% \u00b1 {hs:.0f}",
@@ -1061,7 +1058,7 @@ with tab_predict:
 
                         sv = fc["mean_solar_radiation"]
                         ss = spread.get("mean_solar_radiation", 0)
-                        sd = (delta.get("mean_solar_radiation", 0) if delta else 0)
+                        sd = delta.get("mean_solar_radiation", 0) if delta else 0
                         wc4.metric(
                             "Solar Radiation",
                             f"{sv:.1f} MJ/m\u00b2/d \u00b1 {ss:.1f}",
@@ -1130,7 +1127,6 @@ with tab_predict:
                 except Exception:
                     pass
 
-                # Risk alerts (historical only)
                 if not use_forecast:
                     try:
                         risk = assess_state_risk(str(selected_state))
@@ -1170,7 +1166,6 @@ with tab_predict:
                 val = user_inputs.get(col_name, "")
                 display_val = friendly_name(col_name)
 
-                # Determine source label
                 if col_name == IRRIGATION_FEATURE:
                     src = (
                         _source_badge_user()
@@ -1194,7 +1189,6 @@ with tab_predict:
                 else:
                     src = "\u2014"
 
-                # Format value consistently
                 if isinstance(val, float):
                     if abs(val - round(val)) < 0.05:
                         fmt_val = f"{int(round(val))}"
@@ -1371,7 +1365,11 @@ with tab_data:
     st.markdown("#### Dataset Insights (50K rows)")
 
     if not DATA_OK:
-        st.warning("Dataset not found.")
+        st.warning(
+            "Dataset not available on this deployment. "
+            "Data Insights requires the raw CSV file at `data/raw/crop_production_india.csv`. "
+            "The Prediction, SHAP, and Model Info tabs work without it."
+        )
     else:
         df = dataset.copy()
 
@@ -1833,7 +1831,10 @@ with tab_info:
             )
             st.plotly_chart(fig_resid, width="stretch")
     else:
-        st.info("Metrics not available.")
+        st.info(
+            "Evaluation metrics not available on this deployment. "
+            "Run locally with the dataset to compute metrics."
+        )
 
     st.divider()
     col_a, col_b, col_c = st.columns(3)
@@ -1929,7 +1930,7 @@ with tab_info:
 
 st.divider()
 st.caption(
-    "Crop Yield Prediction v3.2.1 \u00b7 50K district-level records "
+    "Crop Yield Prediction v3.2.2 \u00b7 50K district-level records "
     "\u00b7 Historical: NASA POWER \u00b7 Forecast: Open-Meteo (CC-BY 4.0) "
     "\u00b7 Inputs: Irrigation + NPK (overridable) "
     "\u00b7 Built with Streamlit, XGBoost, SHAP"
