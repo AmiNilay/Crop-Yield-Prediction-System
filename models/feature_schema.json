@@ -1,10 +1,9 @@
 {
-  "target_column": "yield",
   "feature_columns": [
-    "state",
-    "crop_year",
-    "season",
     "crop",
+    "state",
+    "season",
+    "crop_year",
     "area",
     "mean_temperature",
     "total_precipitation",
@@ -28,9 +27,9 @@
     "irrigation_coverage_pct",
     "npk_consumption_kg_per_ha"
   ],
-  "crop_column": "crop",
-  "state_column": "state",
+  "target_column": "yield",
   "output_feature_names": [
+    "crop_ARHAR/TUR",
     "crop_DRY CHILLIES",
     "crop_GRAM",
     "crop_GROUNDNUT",
@@ -45,6 +44,7 @@
     "crop_SUNFLOWER",
     "crop_URAD",
     "crop_WHEAT",
+    "state_Andaman And Nicobar Islands",
     "state_Andhra Pradesh",
     "state_Arunachal Pradesh",
     "state_Assam",
@@ -77,6 +77,7 @@
     "state_Uttar Pradesh",
     "state_Uttarakhand",
     "state_West Bengal",
+    "season_AUTUMN",
     "season_KHARIF",
     "season_RABI",
     "season_SUMMER",
@@ -91,9 +92,17 @@
     "irrigation_coverage_pct",
     "npk_consumption_kg_per_ha"
   ],
-  "n_model_features": 59,
-  "n_preprocessor_features": 59,
-  "dropped_first": true,
+  "n_output_features": 62,
+  "crop_column": "crop",
+  "state_column": "state",
+  "stats_area": {
+    "min": 1.0,
+    "max": 877029.0,
+    "mean": 15610.8,
+    "median": 1100.0,
+    "std": 41455.8
+  },
+  "n_training_samples": 50000,
   "unique_crop": [
     "ARHAR/TUR",
     "DRY CHILLIES",
@@ -154,18 +163,24 @@
     "WHOLE YEAR",
     "WINTER"
   ],
-  "stats_crop_year": {
-    "min": 1997.0,
-    "max": 2014.0,
-    "mean": 2005.68428,
-    "std": 4.992348080050814,
-    "median": 2006.0
-  },
-  "stats_area": {
-    "min": 1.0,
-    "max": 877029.0,
-    "mean": 15610.773931400001,
-    "std": 41455.813227333594,
-    "median": 1100.0
-  }
+  "unique_crop_year": [
+    1997,
+    1998,
+    1999,
+    2000,
+    2001,
+    2002,
+    2003,
+    2004,
+    2005,
+    2006,
+    2007,
+    2008,
+    2009,
+    2010,
+    2011,
+    2012,
+    2013,
+    2014
+  ]
 }
