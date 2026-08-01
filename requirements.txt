@@ -1,27 +1,13 @@
-# ============================================================
-#  Crop Yield Prediction — Streamlit Cloud Deployment
-#  Python 3.10+ (pinned via runtime.txt)
-# ============================================================
-
-# ── Core ML ──────────────────────────────────────────────────
-numpy==1.26.4
-pandas==2.2.2
-scikit-learn==1.4.2
-xgboost==2.0.3
-shap==0.44.1
-joblib==1.4.0
-
-# ── Visualization ───────────────────────────────────────────
-plotly==5.20.0
-matplotlib==3.8.4
-
-# ── Dashboard ───────────────────────────────────────────────
-streamlit==1.30.0
-
-# ── API Server ──────────────────────────────────────────────
-fastapi==0.110.0
-uvicorn==0.29.0
-pydantic==2.6.4
-
-# ── Weather APIs ────────────────────────────────────────────
-requests==2.31.0
+numpy>=2.0
+pandas>=2.2
+scikit-learn>=1.5
+xgboost>=2.1
+shap>=0.46
+joblib>=1.4
+plotly>=5.20
+matplotlib>=3.9
+streamlit>=1.35
+fastapi>=0.115
+uvicorn>=0.30
+pydantic>=2.7
+requests>=2.32
