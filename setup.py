@@ -1,33 +1,28 @@
 from setuptools import find_packages, setup
 from typing import List
 
-# Constant for the requirements file
 REQUIREMENTS_FILE_NAME = "requirements.txt"
 HYPHEN_E_DOT = "-e ."
 
-def get_requirements() -> List[str]:
-    """
-    This function will return the list of requirements
-    from the requirements.txt file.
-    """
-    with open(REQUIREMENTS_FILE_NAME) as file_obj:
-        requirements = file_obj.readlines()
-        # Use list comprehension to remove the newline characters
-        requirements = [req.replace("\n", "") for req in requirements]
 
-        # The '-e .' in requirements.txt is used to install the local package
-        # in editable mode, but it's not a package dependency itself.
-        # We need to remove it from the list.
-        if HYPHEN_E_DOT in requirements:
-            requirements.remove(HYPHEN_E_DOT)
-    
+def get_requirements() -> List[str]:
+    """Read and return dependencies from requirements.txt."""
+    with open(REQUIREMENTS_FILE_NAME) as f:
+        requirements = [
+            line.strip() for line in f
+            if line.strip() and not line.strip().startswith("#")
+        ]
+    if HYPHEN_E_DOT in requirements:
+        requirements.remove(HYPHEN_E_DOT)
     return requirements
+
 
 setup(
     name="CropYieldPrediction",
-    version="0.0.1",
-    author="Your Name",
-    author_email="your.email@example.com",
+    version="1.0.0",
+    author="Niloy",
+    description="AI-powered crop yield prediction with disease detection extension",
     packages=find_packages(),
-    install_requires=get_requirements(), # Dynamically get requirements
+    install_requires=get_requirements(),
+    python_requires=">=3.10",
 )

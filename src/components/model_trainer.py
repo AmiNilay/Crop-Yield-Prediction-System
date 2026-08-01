@@ -1,83 +1,167 @@
 import os
 import sys
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from typing import Any, Dict
 
-# Import new libraries
-from xgboost import XGBRegressor
+import numpy as np
+import xgboost as xgb
+from sklearn.metrics import (
+    mean_absolute_error,
+    mean_squared_error,
+    r2_score,
+)
 from sklearn.model_selection import GridSearchCV
-# ---
 
-from sklearn.metrics import r2_score
 from src.exception.exception import CustomException
 from src.logging.logger import logging
-from src.utils.common import save_object
+from src.utils.common import save_json, save_object
+
+# ---------------------------------------------------------------------------
+#  Constants
+# ---------------------------------------------------------------------------
+RANDOM_SEED: int = 42
+R2_THRESHOLD: float = 0.1
+
 
 @dataclass
 class ModelTrainerConfig:
-    trained_model_file_path = os.path.join("models", "model.pkl")
+    trained_model_file_path: str = os.path.join("models", "model.pkl")
+    metadata_file_path: str = os.path.join("models", "model_metadata.json")
+
 
 class ModelTrainer:
-    def __init__(self):
-        self.model_trainer_config = ModelTrainerConfig()
+    """Train XGBRegressor with GridSearchCV, evaluate, and persist."""
 
-    def initiate_model_trainer(self, train_array, test_array):
+    def __init__(self) -> None:
+        self.config = ModelTrainerConfig()
+
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _compute_metrics(
+        y_true: np.ndarray, y_pred: np.ndarray
+    ) -> Dict[str, float]:
+        """Compute regression metrics."""
+        rmse = float(np.sqrt(mean_squared_error(y_true, y_pred)))
+        mae = float(mean_absolute_error(y_true, y_pred))
+        r2 = float(r2_score(y_true, y_pred))
+        mask = y_true > 0.01
+        mape = (
+            float(np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100)
+            if mask.any()
+            else 0.0
+        )
+        return {
+            "rmse": round(rmse, 4),
+            "mae": round(mae, 4),
+            "r2": round(r2, 4),
+            "mape": round(mape, 2),
+        }
+
+    # ------------------------------------------------------------------
+    def initiate_model_trainer(
+        self, train_array: np.ndarray, test_array: np.ndarray
+    ) -> float:
+        """Run GridSearchCV, evaluate, save model + metadata.
+
+        Returns:
+            R² score on the test set.
+        """
         try:
-            logging.info("Splitting training and test input data")
-            X_train, y_train, X_test, y_test = (
-                train_array[:, :-1],
-                train_array[:, -1],
-                test_array[:, :-1],
-                test_array[:, -1]
-            )
-            
-            # --- NEW: Hyperparameter Tuning with GridSearchCV ---
-            
-            # 1. Initialize the model
-            xgb = XGBRegressor(random_state=42)
-            
-            # 2. Define a small parameter grid to search
-            # For a real project, this grid would be much larger.
-            param_grid = {
-                'n_estimators': [50, 100],
-                'learning_rate': [0.1, 0.05],
-                'max_depth': [3, 5]
+            logging.info("Splitting train/test arrays")
+            X_train, y_train = train_array[:, :-1], train_array[:, -1]
+            X_test, y_test = test_array[:, :-1], test_array[:, -1]
+
+            # ------------------------------------------------------------------
+            #  GridSearchCV
+            # ------------------------------------------------------------------
+            xgb_model = xgb.XGBRegressor(random_state=RANDOM_SEED)
+
+            param_grid: Dict[str, list] = {
+                "n_estimators": [50, 100],
+                "learning_rate": [0.1, 0.05],
+                "max_depth": [3, 5],
+                "subsample": [0.8, 1.0],
             }
-            
-            # 3. Set up GridSearchCV
-            # cv=3 means 3-fold cross-validation. scoring='r2' is the metric to optimize.
-            # n_jobs=-1 uses all available CPU cores to speed up the search.
+
             grid_search = GridSearchCV(
-                estimator=xgb, 
-                param_grid=param_grid, 
-                cv=3, 
-                n_jobs=-1, 
-                verbose=2, 
-                scoring='r2'
+                estimator=xgb_model,
+                param_grid=param_grid,
+                cv=3,
+                n_jobs=-1,
+                verbose=2,
+                scoring="r2",
             )
-            
-            logging.info("Starting Hyperparameter Tuning with GridSearchCV")
+
+            logging.info("Starting GridSearchCV (3-fold, seed=%d)", RANDOM_SEED)
             grid_search.fit(X_train, y_train)
-            
-            # 4. Get the best model from the search
-            best_model = grid_search.best_estimator_
-            logging.info(f"Best parameters found: {grid_search.best_params_}")
 
-            # 5. Evaluate the best model on the test set
+            best_model: xgb.XGBRegressor = grid_search.best_estimator_
+            best_params: Dict[str, Any] = grid_search.best_params_
+            logging.info("Best params: %s", best_params)
+
+            # ------------------------------------------------------------------
+            #  Evaluate
+            # ------------------------------------------------------------------
             y_pred = best_model.predict(X_test)
-            score = r2_score(y_test, y_pred)
-            logging.info(f"Model R2 Score on Test Set: {score}")
+            metrics = self._compute_metrics(y_test, y_pred)
+            logging.info("Test metrics: %s", metrics)
 
-            if score < 0.1: # Kept the low threshold for the sample data
-                 raise CustomException(Exception("Model performance is too low after tuning"), sys)
+            if metrics["r2"] < R2_THRESHOLD:
+                raise CustomException(
+                    Exception(
+                        f"R²={metrics['r2']:.4f} below threshold {R2_THRESHOLD}"
+                    ),
+                    sys,
+                )
 
-            # 6. Save the best model
+            # ------------------------------------------------------------------
+            #  Save model (sklearn wrapper)
+            # ------------------------------------------------------------------
             save_object(
-                file_path=self.model_trainer_config.trained_model_file_path,
-                obj=best_model
+                file_path=self.config.trained_model_file_path,
+                obj=best_model,
             )
-            
-            logging.info("Best model found via GridSearchCV has been saved.")
-            return score
+            # save_object already auto-saves model.json and model.ubj
+            logging.info("Model saved -> %s (+ native formats)", self.config.trained_model_file_path)
+
+            # ------------------------------------------------------------------
+            #  Save metadata
+            # ------------------------------------------------------------------
+            metadata: Dict[str, Any] = {
+                "model_version": "1.0.0",
+                "created_at": datetime.now(timezone.utc).strftime(
+                    "%Y-%m-%dT%H:%M:%SZ"
+                ),
+                "model_type": "XGBRegressor",
+                "framework": f"xgboost {xgb.__version__}",
+                "random_seed": RANDOM_SEED,
+                "hyperparameters": best_params,
+                "training_data": {
+                    "n_train": int(X_train.shape[0]),
+                    "n_test": int(X_test.shape[0]),
+                    "n_features": int(X_train.shape[1]),
+                    "split": f"80/20 (seed={RANDOM_SEED})",
+                },
+                "evaluation": {
+                    "test_metrics": metrics,
+                    "grid_search_cv": 3,
+                    "grid_search_best_score": round(
+                        float(grid_search.best_score_), 4
+                    ),
+                },
+                "files": {
+                    "model_pickle": "model.pkl",
+                    "model_json": "model.json",
+                    "model_ubj": "model.ubj",
+                    "preprocessor": "preprocessor.pkl",
+                },
+            }
+            save_json(self.config.metadata_file_path, metadata)
+            logging.info("Metadata saved -> %s", self.config.metadata_file_path)
+
+            return metrics["r2"]
 
         except Exception as e:
+            logging.error("Model training failed: %s", e)
             raise CustomException(e, sys)
