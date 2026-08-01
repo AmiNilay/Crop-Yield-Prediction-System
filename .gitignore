@@ -22,20 +22,20 @@ env/
 logs/
 *.log
 
-# Data (too large for git)
-data/raw/
+# Data — processed intermediate files only (keep raw for deployment)
 data/processed/
 data/external/
 
-# Cached weather & forecast
+# Cached weather & forecast (regenerated at runtime)
 data/processed/forecast_cache.json
 data/processed/weather_cache.json
 data/processed/.weather_cache.json
 
-# Large model binaries (keep schema + metadata only)
-models/*.pkl
-models/*.joblib
+# Backup model formats (not needed for deployment; keep .json + .pkl only)
 models/*.ubj
+models/*.joblib
+models/rice_yield_predictor.joblib
+models/wheat_yield_predictor.pkl
 
 # OS
 .DS_Store
@@ -48,3 +48,8 @@ notebooks/.ipynb_checkpoints/
 # Environment files
 .env
 *.env
+
+# Backup files
+*.backup
+requirements.txt.backup
+requirements.deploy-backup.txt
