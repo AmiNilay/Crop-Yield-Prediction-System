@@ -2,12 +2,12 @@
 dashboard/app.py
 
 AI-Powered Crop Yield Prediction System — Streamlit Dashboard
-Version 3.2.2 — Cloud-safe dataset loading
+Version 3.2.3 — Debug logging for cloud deployment
 
 Fixes:
   v3.2.1: Checkbox, button placement, badge dedup, icon consistency
-  v3.2.2: Dataset loading no longer hangs on Streamlit Cloud
-          (graceful None return when CSV not found)
+  v3.2.2: Dataset loading cloud-safe (graceful None return)
+  v3.2.3: Debug logging in predict_yield for cloud error diagnosis
 """
 
 # =========================================================================
@@ -21,6 +21,7 @@ import pickle
 import re
 import sys
 import tempfile
+import traceback
 import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -377,7 +378,10 @@ def load_booster():
             try:
                 booster = xgb.Booster()
                 booster.load_model(str(path))
-                return _fix_xgb_base_score(booster)
+                booster = _fix_xgb_base_score(booster)
+                print(f"[DEBUG] Loaded XGBoost model from {fname}, "
+                      f"num_features={int(booster.num_features())}")
+                return booster
             except Exception:
                 continue
     return None
@@ -478,20 +482,50 @@ def load_dataset():
 
 
 def predict_yield(booster, preprocessor, input_df, feature_names):
+    """Run prediction with full debug logging for cloud diagnosis."""
     try:
+        print(f"[DEBUG] Input columns: {list(input_df.columns)}")
+        print(f"[DEBUG] Input shape: {input_df.shape}")
+        print(f"[DEBUG] Input dtypes: {dict(input_df.dtypes)}")
+
         X_t = preprocessor.transform(input_df)
         if hasattr(X_t, "toarray"):
             X_t = X_t.toarray()
         X_arr = np.asarray(X_t, dtype=np.float32)
         if X_arr.ndim == 1:
             X_arr = X_arr.reshape(1, -1)
+
+        n_cols = X_arr.shape[1]
+        n_model = int(booster.num_features())
+        n_schema = len(feature_names) if feature_names else 0
+
+        print(f"[DEBUG] Preprocessor output: {n_cols} features")
+        print(f"[DEBUG] Model expects: {n_model} features")
+        print(f"[DEBUG] Schema says: {n_schema} features")
+        print(f"[DEBUG] Preprocessor type: {type(preprocessor).__name__}")
+
+        if n_cols != n_model:
+            print(f"[ERROR] FEATURE MISMATCH: preprocessor={n_cols}, model={n_model}")
+            st.error(
+                f"Feature mismatch: preprocessor outputs {n_cols} features, "
+                f"but model expects {n_model}. Rebuild with: "
+                f"`python -m src.pipeline.train_pipeline` then "
+                f"`python scripts/rebuild_schema.py`"
+            )
+            return None, X_arr
+
         dmat = xgb.DMatrix(X_arr, feature_names=feature_names or None)
-        return float(booster.predict(dmat)[0]), X_arr
-    except Exception:
+        pred = float(booster.predict(dmat)[0])
+        print(f"[DEBUG] Prediction: {pred:.4f} q/ha")
+        return pred, X_arr
+
+    except Exception as e:
+        print(f"[ERROR] predict_yield failed: {e}")
+        print(traceback.format_exc())
+        st.error(f"Prediction error: {e}")
         return None, None
 
 
-@st.cache_data
 def compute_evaluation_metrics():
     """Compute model evaluation metrics. Returns None if dataset unavailable (cloud-safe)."""
     try:
@@ -613,6 +647,14 @@ target_col = schema.get("target_column", "") if SCHEMA_OK else ""
 output_feature_names = schema.get("output_feature_names", []) if SCHEMA_OK else []
 crop_col = schema.get("crop_column") if SCHEMA_OK else None
 state_col = schema.get("state_column") if SCHEMA_OK else None
+
+# Startup debug info
+print(f"[DEBUG] Schema OK: {SCHEMA_OK}, Booster OK: {BOOSTER_OK}, "
+      f"Preprocessor OK: {PREPROC_OK}")
+if SCHEMA_OK:
+    print(f"[DEBUG] Schema output features: {len(output_feature_names)}")
+if BOOSTER_OK:
+    print(f"[DEBUG] Model features: {int(booster.num_features())}")
 
 
 # =========================================================================
@@ -858,8 +900,14 @@ st.divider()
 
 if not SCHEMA_OK or not BOOSTER_OK or not PREPROC_OK:
     st.error(
-        "**Setup required.**\n\n```powershell\n"
-        "python scripts/build_preprocessor.py\n```"
+        "**Setup required.**\n\n"
+        "One or more model files missing from `models/` directory.\n\n"
+        "Required files:\n"
+        "- `feature_schema.json`\n"
+        "- `model.json`\n"
+        "- `preprocessor.pkl`\n\n"
+        "Run locally: `python -m src.pipeline.train_pipeline` then "
+        "`python scripts/rebuild_schema.py`"
     )
     st.stop()
 
@@ -1205,7 +1253,8 @@ with tab_predict:
                 pd.DataFrame(summary_rows), width="stretch", hide_index=True
             )
         else:
-            st.error("Prediction failed.")
+            # Error already shown by predict_yield function
+            pass
     else:
         st.info(
             "Configure your farm details in the sidebar and "
@@ -1367,7 +1416,8 @@ with tab_data:
     if not DATA_OK:
         st.warning(
             "Dataset not available on this deployment. "
-            "Data Insights requires the raw CSV file at `data/raw/crop_production_india.csv`. "
+            "Data Insights requires the raw CSV file at "
+            "`data/raw/crop_production_india.csv`. "
             "The Prediction, SHAP, and Model Info tabs work without it."
         )
     else:
@@ -1930,7 +1980,7 @@ with tab_info:
 
 st.divider()
 st.caption(
-    "Crop Yield Prediction v3.2.2 \u00b7 50K district-level records "
+    "Crop Yield Prediction v3.2.3 \u00b7 50K district-level records "
     "\u00b7 Historical: NASA POWER \u00b7 Forecast: Open-Meteo (CC-BY 4.0) "
     "\u00b7 Inputs: Irrigation + NPK (overridable) "
     "\u00b7 Built with Streamlit, XGBoost, SHAP"
