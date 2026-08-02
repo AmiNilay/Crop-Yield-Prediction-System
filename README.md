@@ -16,7 +16,7 @@
 
 [Live Demo](#) · [API Docs](#api-documentation) · [Dashboard](#dashboard) · [Report Bug](https://github.com/AmiNilay/Crop-Yield-Prediction-System/issues) · [Request Feature](https://github.com/AmiNilay/Crop-Yield-Prediction-System/issues)
 
-![Dashboard Preview](docs/screenshots/hero.png)
+![Dashboard Preview](docs/screenshots/tab1_prediction.jpg)
 
 </div>
 
